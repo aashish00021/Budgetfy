@@ -14,8 +14,7 @@ export default function SignUpScreen() {
   
   const handleSignUp = async() =>{
     if(email && password){
-      navigate.goBack();
-      // await createUserWithEmailAndPassword(FIREBASE_AUTH, email, password);
+      await createUserWithEmailAndPassword(FIREBASE_AUTH, email, password);
     }
     else{
     }
