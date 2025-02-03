@@ -12,6 +12,8 @@ import { RootState } from '../store/store';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { fetchTripExpenses } from '../store/expenseSlice';
 import { AppDispatch } from '../store/store';
+import { useTheme } from '../hooks/useTheme';
+import { ThemedView } from '../components/ThemedView';
 
 type RootStackParamList = {
   AddExpenses: { tripId: string };
@@ -23,7 +25,8 @@ export default function TripExpensesScreen() {
   const route = useRoute();
   const { place, country, id: tripId } = route.params as { place: string; country: string; id: string };
   const expenses = useSelector(selectExpensesByTripId(tripId));
-  const { currency } = useSelector((state: RootState) => state.currency);
+  const { targetCurrency } = useSelector((state: RootState) => state.currency);
+  const theme = useTheme();
 
   // Add this useEffect to fetch expenses when screen loads
   useEffect(() => {
@@ -35,20 +38,21 @@ export default function TripExpensesScreen() {
   // Calculate total expenses
   const totalExpenses = useMemo(() => {
     const total = expenses.reduce((sum, expense) => sum + expense.amount, 0);
-    const convertedTotal = total * currency.rate;
+    // amount is in INR, convert to target currency
+    const convertedTotal = total * targetCurrency.rate;
     return convertedTotal.toFixed(2);
-  }, [expenses, currency.rate]);
+  }, [expenses, targetCurrency.rate]);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ThemedView style={styles.container}>
       <View style={styles.backButtonContainer}>
         <BackButton />
       </View>
 
       {/* Header Section */}
       <View style={styles.header}>
-        <Text style={styles.place}>{place}</Text>
-        <Text style={styles.country}>{country}</Text>
+        <Text style={[styles.place, { color: 'black' }]}>{place}</Text>
+        <Text style={[styles.country, { color: theme.colors.grey }]}>{country}</Text>
       </View>
 
       {/* Trip Image */}
@@ -60,48 +64,56 @@ export default function TripExpensesScreen() {
       </View>
 
       {/* Total Expenses Card */}
-      <View style={styles.totalCard}>
-        <Text style={styles.totalLabel}>Total Expenses</Text>
-        <Text style={styles.totalAmount}>
-          {currency.symbol}{totalExpenses}
+      <View style={[styles.totalCard, { backgroundColor: theme.colors.primary }]}>
+        <Text style={[styles.totalLabel, { color: theme.colors.text }]}>
+          Total Expenses
+        </Text>
+        <Text style={[styles.totalAmount, { color: theme.colors.text }]}>
+          {targetCurrency.symbol}{totalExpenses}
         </Text>
       </View>
 
       {/* Expenses Section */}
-      <View style={styles.expensesContainer}>
+      <View style={[styles.expensesContainer, { backgroundColor: theme.colors.background }]}>
         <View style={styles.expensesHeader}>
-          <Text style={styles.expensesTitle}>Expenses</Text>
+          <Text style={[styles.expensesTitle, { color: theme.colors.text }]}>
+            Expenses
+          </Text>
           <TouchableOpacity 
+            style={[styles.addButton, { 
+              backgroundColor: theme.colors.card,
+              borderColor: theme.colors.border
+            }]}
             onPress={() => navigation.navigate('AddExpenses', { tripId })}
-            style={styles.addButton}
           >
-            <Text style={styles.addButtonText}>Add Expense</Text>
+            <Text style={[styles.addButtonText, { color: theme.colors.grey }]}>
+              Add Expense
+            </Text>
           </TouchableOpacity>
         </View>
 
         <FlatList 
           data={expenses}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => <ExpenseCard expense={item} />}
           ListEmptyComponent={<EmptyList />}
-          showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.expensesList}
-          renderItem={({item}) => (
-            <ExpenseCard expense={item} />
-          )}
         />
       </View>
-    </SafeAreaView>
+    </ThemedView>
   )
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff'
+    backgroundColor: '#fff',
+    paddingTop:40
   },
   backButtonContainer: {
     position: 'absolute',
     zIndex: 1,
-    top: 20,
+    top: 50,
     left: 10
   },
   header: {

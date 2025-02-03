@@ -1,68 +1,38 @@
 import { Image, StatusBar, StyleSheet, Text, TouchableOpacity, View, Modal, PermissionsAndroid, Platform, Linking, Alert } from 'react-native'
 import React, { useMemo, useState } from 'react'
 import IMAGES from '../assets/images'
-import { useDispatch, useSelector } from 'react-redux'
+import { useSelector, useDispatch } from 'react-redux'
 import { RootState } from '../store/store'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { setCurrency } from '../store/currencySlice'
 import { launchCamera, launchImageLibrary, ImagePickerResponse, PhotoQuality, MediaType } from 'react-native-image-picker'
-import { signOut } from 'firebase/auth'
-import { FIREBASE_AUTH } from '../config/firebase'
+import { NativeStackNavigationProp } from '@react-navigation/native-stack'
+import { RootStackParamList } from 'types/navigation'
+import { useNavigation } from '@react-navigation/native'
+import { useTheme } from '../hooks/useTheme'
+import { setThemeMode } from '../store/themeSlice'
+import type { ThemeMode } from '../store/themeSlice'
+
+type Props = NativeStackNavigationProp<RootStackParamList>;
 
 export default function ProfileScreen() {
-  const dispatch = useDispatch();
-  const { currency } = useSelector((state: RootState) => state.currency);
+  const { targetCurrency } = useSelector((state: RootState) => state.currency);
   const trips = useSelector((state: RootState) => state.trips.trips);
   const expenses = useSelector((state: RootState) => state.expenses);
-
-  const currencies = [
-    { symbol: '₹', id: 'INR', rate:1},
-    { symbol: '$', id: 'USD', rate:0.011673},
-    { symbol: '€', id: 'EUR', rate:0.0113},
-  ];
+  const navigation = useNavigation<Props>();
+  const dispatch = useDispatch();
+  const theme = useTheme();
+  const { mode } = useSelector((state: RootState) => state.theme);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [profileImage, setProfileImage] = useState(IMAGES.PROFILE);
 
-  const handleCurrencyChange = () => {
-    // Cycle through currencies
-    const currentIndex = currencies.findIndex(c => c.id === currency.id);
-    const nextIndex = (currentIndex + 1) % currencies.length;
-    dispatch(setCurrency(currencies[nextIndex]));
-  };
 
   const totalAmount = useMemo(() => {
     const total = Object.values(expenses).reduce((sum, tripExpenses) => {
       return sum + tripExpenses.reduce((tripSum, expense) => tripSum + expense.amount, 0);
     }, 0);
-    return (total * currency.rate).toFixed(2);
-  }, [expenses, currency.rate]);
-  
-  const requestCameraPermission = async () => {
-    try {
-      // Check if permissions are already granted
-      const cameraPermission = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.CAMERA);
-      const storagePermission = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE);
-
-      if (cameraPermission && storagePermission) {
-        return true;
-      }
-
-      // Request permissions if not granted
-      const granted = await PermissionsAndroid.requestMultiple([
-        PermissionsAndroid.PERMISSIONS.CAMERA,
-        PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
-      ]);
-
-      return (
-        granted['android.permission.CAMERA'] === PermissionsAndroid.RESULTS.GRANTED &&
-        granted['android.permission.WRITE_EXTERNAL_STORAGE'] === PermissionsAndroid.RESULTS.GRANTED
-      );
-    } catch (err) {
-      console.warn(err);
-      return false;
-    }
-  };
+    return (total * targetCurrency.rate).toFixed(2);
+  }, [expenses, targetCurrency.rate]);
 
   const handleCameraLaunch = async () => {
     try {
@@ -156,13 +126,20 @@ export default function ProfileScreen() {
     });
   };
 
+  const handleThemeChange = () => {
+    const themes: ThemeMode[] = ['light', 'dark', 'system'];
+    const currentIndex = themes.indexOf(mode);
+    const nextTheme = themes[(currentIndex + 1) % themes.length];
+    dispatch(setThemeMode(nextTheme));
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
       
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Profile</Text>
+        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Profile</Text>
       </View>
 
       {/* Profile Card */}
@@ -211,7 +188,7 @@ export default function ProfileScreen() {
       {/* Stats Section */}
       <View style={styles.statsContainer}>
         <View style={styles.statCard}>
-          <Text style={styles.statAmount}>{currency.symbol}{totalAmount}</Text>
+          <Text style={styles.statAmount}>{targetCurrency.symbol}{totalAmount}</Text>
           <Text style={styles.statLabel}>Total Spent</Text>
         </View>
         <View style={styles.statCard}>
@@ -221,25 +198,45 @@ export default function ProfileScreen() {
       </View>
 
       {/* Settings Section */}
-      <View style={styles.settingsContainer}>
-        <Text style={styles.sectionTitle}>Settings</Text>
+      <View style={[styles.settingsContainer, { backgroundColor: theme.colors.card }]}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Settings</Text>
+        
+        {/* Currency Setting */}
         <TouchableOpacity 
-          style={styles.settingItem}
-          onPress={handleCurrencyChange}
+          style={[styles.settingItem, { borderBottomColor: theme.colors.border }]}
+          onPress={() => navigation.navigate('Currency')}
         >
-          <Text style={styles.settingText}>Currency</Text>
+          <Text style={[styles.settingText, { color: theme.colors.text }]}>Currency</Text>
           <View style={styles.currencyValue}>
-            <Text style={styles.settingValue}>{currency.symbol} {currency.id}</Text>
+            <Text style={[styles.settingValue, { color: theme.colors.grey }]}>
+              {targetCurrency.symbol} {targetCurrency.id}
+            </Text>
           </View>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.settingItem}>
-          <Text style={styles.settingText}>Theme</Text>
-          <Text style={styles.settingValue}>Light</Text>
+
+        {/* Theme Setting */}
+        <TouchableOpacity 
+          style={[styles.settingItem, { borderBottomColor: theme.colors.border }]}
+          onPress={handleThemeChange}
+        >
+          <Text style={[styles.settingText, { color: theme.colors.text }]}>Theme</Text>
+          <Text style={[styles.settingValue, { color: theme.colors.grey }]}>
+            {mode.charAt(0).toUpperCase() + mode.slice(1)}
+          </Text>
         </TouchableOpacity>
+
         <TouchableOpacity style={styles.settingItem}>
-          <Text style={styles.settingText}>Language</Text>
-          <Text style={styles.settingValue}>English</Text>
+          <Text style={[styles.settingText, { color: theme.colors.text }]}>Language</Text>
+          <Text style={[styles.settingValue, { color: theme.colors.grey }]}>English</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[styles.settingItem, { borderBottomColor: theme.colors.border }]}
+          onPress={() => navigation.navigate('Currency')}
+        >
+          <Text style={[styles.settingText, { color: theme.colors.text }]}>Help</Text>
+        </TouchableOpacity>
+
       </View>
 
       {/* Logout Button */}
@@ -345,8 +342,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    // borderBottomWidth: 1,
+    // borderBottomColor: '#e0e0e0',
   },
   settingText: {
     fontSize: 16,
@@ -413,5 +410,12 @@ const styles = StyleSheet.create({
   },
   cancelText: {
     color: 'red',
+  },
+  settingValueContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  settingIcon: {
+    marginRight: 8,
   },
 })
